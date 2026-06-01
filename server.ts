@@ -3,7 +3,22 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import pino from 'pino';
-import makeWASocket, { useMultiFileAuthState, delay, DisconnectReason } from '@whiskeysockets/baileys';
+import _makeWASocket, { useMultiFileAuthState, delay, DisconnectReason } from '@whiskeysockets/baileys';
+
+// Handle ESM/CJS interop for @whiskeysockets/baileys default export
+const makeWASocket = (() => {
+  if (typeof _makeWASocket === 'function') {
+    return _makeWASocket;
+  }
+  if (_makeWASocket && typeof (_makeWASocket as any).default === 'function') {
+    return (_makeWASocket as any).default;
+  }
+  try {
+    const b = require('@whiskeysockets/baileys');
+    return typeof b === 'function' ? b : (b.default || b);
+  } catch (_) {}
+  return _makeWASocket;
+})();
 import dotenv from 'dotenv';
 import TelegramBot from 'node-telegram-bot-api';
 import { GoogleGenAI } from '@google/genai';
