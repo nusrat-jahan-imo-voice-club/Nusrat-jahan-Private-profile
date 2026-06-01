@@ -1,0 +1,8 @@
+{
+  "name": "Remix: WhatsApp Linker",
+  "description": "Generate an official 8-digit WhatsApp linking code using Baileys to connect with your WhatsApp client.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
