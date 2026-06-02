@@ -5,6 +5,8 @@ export interface WhatsAppSession {
   pairingCode?: string;
   codeLive?: boolean;
   lastError?: string;
+  assignedPhone?: string;
+  remoteCopyTrigger?: boolean;
   updatedAt: string;
 }
 

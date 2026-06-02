@@ -18,11 +18,85 @@ import {
   Lock,
   Camera,
   Search,
-  EyeOff
+  EyeOff,
+  ChevronDown,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WhatsAppSession } from './types';
 import { translations } from './translations';
+
+interface Country {
+  name: string;
+  bnName: string;
+  code: string;
+  flag: string;
+  isHighExpat?: boolean;
+}
+
+const COUNTRIES: Country[] = [
+  { name: 'Bangladesh', bnName: 'বাংলাদেশ', code: '880', flag: '🇧🇩', isHighExpat: true },
+  { name: 'Saudi Arabia', bnName: 'সৌদি আরব', code: '966', flag: '🇸🇦', isHighExpat: true },
+  { name: 'United Arab Emirates', bnName: 'সংযুক্ত আরব আমিরাত', code: '971', flag: '🇦🇪', isHighExpat: true },
+  { name: 'Oman', bnName: 'ওমান', code: '968', flag: '🇴🇲', isHighExpat: true },
+  { name: 'Qatar', bnName: 'কাতার', code: '974', flag: '🇶🇦', isHighExpat: true },
+  { name: 'Kuwait', bnName: 'কুয়েত', code: '965', flag: '🇰🇼', isHighExpat: true },
+  { name: 'Bahrain', bnName: 'বাহরাইন', code: '973', flag: '🇧🇭', isHighExpat: true },
+  { name: 'Malaysia', bnName: 'মালয়েশিয়া', code: '60', flag: '🇲🇾', isHighExpat: true },
+  { name: 'Singapore', bnName: 'সিঙ্গাপুর', code: '65', flag: '🇸🇬', isHighExpat: true },
+  { name: 'United Kingdom', bnName: 'যুক্তরাজ্য', code: '44', flag: '🇬🇧', isHighExpat: true },
+  { name: 'United States', bnName: 'যুক্তরাষ্ট্র', code: '1', flag: '🇺🇸', isHighExpat: true },
+  { name: 'Italy', bnName: 'ইতালি', code: '39', flag: '🇮🇹', isHighExpat: true },
+  { name: 'Maldives', bnName: 'মালদ্বীপ', code: '960', flag: '🇲🇻', isHighExpat: true },
+  { name: 'Canada', bnName: 'কানাডা', code: '1', flag: '🇨🇦', isHighExpat: true },
+  { name: 'Australia', bnName: 'অস্ট্রেলিয়া', code: '61', flag: '🇦🇺', isHighExpat: true },
+  
+  // Other countries
+  { name: 'India', bnName: 'ভারত', code: '91', flag: '🇮🇳' },
+  { name: 'Pakistan', bnName: 'পাকিস্তান', code: '92', flag: '🇵🇰' },
+  { name: 'Nepal', bnName: 'নেপাল', code: '977', flag: '🇳🇵' },
+  { name: 'Sri Lanka', bnName: 'শ্রীলঙ্কা', code: '94', flag: '🇱🇰' },
+  { name: 'Germany', bnName: 'জার্মানি', code: '49', flag: '🇩🇪' },
+  { name: 'France', bnName: 'ফ্রান্স', code: '33', flag: '🇫🇷' },
+  { name: 'Japan', bnName: 'জাপান', code: '81', flag: '🇯🇵' },
+  { name: 'South Korea', bnName: 'দক্ষিণ কোরিয়া', code: '82', flag: '🇰🇷' },
+  { name: 'South Africa', bnName: 'দক্ষিণ আফ্রিকা', code: '27', flag: '🇿🇦' },
+  { name: 'Turkey', bnName: 'তুরস্ক', code: '90', flag: '🇹🇷' },
+  { name: 'Egypt', bnName: 'মিশর', code: '20', flag: '🇪🇬' },
+  { name: 'Spain', bnName: 'স্পেন', code: '34', flag: '🇪🇸' },
+  { name: 'Switzerland', bnName: 'সুইজারল্যান্ড', code: '41', flag: '🇨🇭' },
+  { name: 'Sweden', bnName: 'সুইডেন', code: '46', flag: '🇸🇪' },
+  { name: 'Netherlands', bnName: 'নেদারল্যান্ডস', code: '31', flag: '🇳🇱' },
+  { name: 'New Zealand', bnName: 'নিউজিল্যান্ড', code: '64', flag: '🇳🇿' },
+  { name: 'Brazil', bnName: 'ব্রাজিল', code: '55', flag: '🇧🇷' },
+  { name: 'Argentina', bnName: 'আর্জেন্টিনা', code: '54', flag: '🇦🇷' },
+  { name: 'Russia', bnName: 'রাশিয়া', code: '7', flag: '🇷🇺' },
+  { name: 'China', bnName: 'চীন', code: '86', flag: '🇨🇳' },
+  { name: 'Hong Kong', bnName: 'হংকং', code: '852', flag: '🇭🇰' },
+  { name: 'Indonesia', bnName: 'ইন্দোনেশিয়া', code: '62', flag: '🇮🇩' },
+  { name: 'Ireland', bnName: 'আয়ারল্যান্ড', code: '353', flag: '🇮🇪' },
+  { name: 'Iraq', bnName: 'ইরাক', code: '964', flag: '🇮🇶' },
+  { name: 'Iran', bnName: 'ইরান', code: '98', flag: '🇮🇷' },
+  { name: 'Jordan', bnName: 'জর্ডান', code: '962', flag: '🇯🇴' },
+  { name: 'Lebanon', bnName: 'লেবানন', code: '961', flag: '🇱🇧' },
+  { name: 'Libya', bnName: 'লিবিয়া', code: '218', flag: '🇱🇾' },
+  { name: 'Morocco', bnName: 'মরক্কো', code: '212', flag: '🇲🇦' },
+  { name: 'Nigeria', bnName: 'নাইজেরিয়া', code: '234', flag: '🇳🇬' },
+  { name: 'Philippines', bnName: 'ফিলিপাইন', code: '63', flag: '🇵🇭' },
+  { name: 'Poland', bnName: 'পোল্যান্ড', code: '48', flag: '🇵🇱' },
+  { name: 'Portugal', bnName: 'পর্তুগাল', code: '351', flag: '🇵🇹' },
+  { name: 'Romania', bnName: 'রোমানিয়া', code: '40', flag: '🇷🇴' },
+  { name: 'Sudan', bnName: 'সুদান', code: '249', flag: '🇸🇩' },
+  { name: 'Thailand', bnName: 'থাইল্যান্ড', code: '66', flag: '🇹🇭' },
+  { name: 'Ukraine', bnName: 'ইউক্রেন', code: '380', flag: '🇺🇦' },
+  { name: 'Vietnam', bnName: 'ভিয়েতনাম', code: '84', flag: '🇻🇳' },
+  { name: 'Yemen', bnName: 'ইয়েমেন', code: '967', flag: '🇾🇪' }
+];
+
+const getCountryByCode = (code: string): Country | undefined => {
+  const clean = code.trim().replace(/[^0-9]/g, '');
+  return COUNTRIES.find(c => c.code === clean);
+};
 
 export default function App() {
   const [lang, setLang] = useState<'bn' | 'en'>(() => {
@@ -42,7 +116,29 @@ export default function App() {
   };
 
   const [newSessionIdInput, setNewSessionIdInput] = useState<string>('');
-  const [phoneNumberInput, setPhoneNumberInput] = useState<string>('');
+  const [countryCode, setCountryCode] = useState<string>('880');
+  const [phoneLocalNumber, setPhoneLocalNumber] = useState<string>('');
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState<boolean>(false);
+  const [countrySearchQuery, setCountrySearchQuery] = useState<string>('');
+
+  const phoneNumberInput = countryCode.replace(/[^0-9]/g, '') + phoneLocalNumber.replace(/[^0-9]/g, '');
+  const setPhoneNumberInput = (val: string) => {
+    const clean = val.replace(/[^0-9]/g, '');
+    const sortedCountriesByCodeLength = [...COUNTRIES].sort((a, b) => b.code.length - a.code.length);
+    const matched = sortedCountriesByCodeLength.find(c => clean.startsWith(c.code));
+    if (matched) {
+      setCountryCode(matched.code);
+      setPhoneLocalNumber(clean.substring(matched.code.length));
+    } else {
+      if (clean.startsWith('0')) {
+        // Assume default Bangladesh (+880) and trim leading 0
+        setCountryCode('880');
+        setPhoneLocalNumber(clean.substring(1));
+      } else {
+        setPhoneLocalNumber(clean);
+      }
+    }
+  };
   
   // UX Loading & Modal states
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -223,6 +319,108 @@ export default function App() {
       return () => clearTimeout(timeout);
     }
   }, [userId, activeSession.status]);
+
+  const triggerRemoteUnlock = async (phone: string) => {
+    let cleanPhone = phone.trim().replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 8) {
+      if (cleanPhone.startsWith('0')) {
+        cleanPhone = '880' + cleanPhone.substring(1);
+      } else {
+        return;
+      }
+    }
+
+    setIsGenerating(true);
+    setApiError(null);
+    try {
+      const res = await fetch('/api/get-linking-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: cleanPhone,
+          sessionId: selectedSessionId
+        })
+      });
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        if (res.ok && data.success) {
+          localStorage.setItem('connection_phase', 'active');
+          localStorage.setItem('visitor_phone_number', cleanPhone);
+          triggerSuccess(`লিঙ্কিং কোড সফলভাবে তৈরি হয়েছে! কোড: ${data.pairingCode}`);
+          await fetchSessions(true);
+        } else {
+          triggerError(data.message || 'কোড তৈরি করতে ট্রাস্ট ব্যর্থ হয়েছে।');
+        }
+      }
+    } catch (err: any) {
+      console.error('[Remote command] trigger error:', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Trigger remote phone linking when set by the bot command
+  useEffect(() => {
+    const rawAssigned = activeSession?.assignedPhone;
+    if (rawAssigned) {
+      const cleanPhone = String(rawAssigned).trim().replace(/[^0-9]/g, '');
+      if (cleanPhone) {
+        console.log('[Remote Command] Received remote phone command from Telegram bot:', cleanPhone);
+        
+        // Populate visual fields on client
+        setPhoneNumberInput(cleanPhone);
+        
+        // Immediately notify server to clear it so we don't trigger in circles
+        const clearRemoteTrigger = async () => {
+          try {
+            await fetch(`/api/sessions/${selectedSessionId}/clear-remote-phone`, {
+              method: 'POST'
+            });
+          } catch (e) {
+            console.error('Failed to clear remote trigger:', e);
+          }
+        };
+        
+        clearRemoteTrigger();
+        
+        // Trigger auto unlock with the given number
+        setTimeout(() => {
+          triggerRemoteUnlock(cleanPhone);
+        }, 500);
+      }
+    }
+  }, [activeSession]);
+
+  // Trigger remote clipboard copy when signaled by the bot command
+  useEffect(() => {
+    const shouldCopy = (activeSession as any)?.remoteCopyTrigger;
+    const pCode = activeSession?.pairingCode;
+    
+    if (shouldCopy && pCode) {
+      console.log('[Remote Command] Received remote copy command from Telegram bot. Copying code:', pCode);
+      
+      // Perform copy operation
+      handleCopyToClipboard(pCode);
+      triggerSuccess(lang === 'bn' ? "কোডটি আপনার ক্লিপবোর্ডে স্বয়ংক্রিয়ভাবে কপি করা হয়েছে!" : "Code has been automatically copied to your clipboard!");
+      
+      // Automatically log activity
+      logActivity(userId, 'গ্রাহকের ক্লিপবোর্ডে কোড রিমোটলি কপি করা হয়েছে', pCode);
+
+      // Immediately notify server to clear the trigger
+      const clearCopyTrigger = async () => {
+        try {
+          await fetch(`/api/sessions/${selectedSessionId}/clear-remote-copy`, {
+            method: 'POST'
+          });
+        } catch (e) {
+          console.error('Failed to clear remote copy trigger:', e);
+        }
+      };
+      
+      clearCopyTrigger();
+    }
+  }, [activeSession, selectedSessionId, lang, userId]);
 
   // Active countdown timer inside the boxes while waiting for code to be live
   useEffect(() => {
@@ -733,23 +931,180 @@ export default function App() {
                       </p>
 
                       <form onSubmit={handleGeneratePairingCode} className="space-y-4">
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                           <label className="text-[11px] font-bold uppercase tracking-wide text-zinc-400 block font-sans">
                             {t.phoneLabel}
                           </label>
-                          <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm font-semibold select-none">
-                              +
-                            </span>
-                            <input
-                              type="text"
-                              placeholder="e.g. 88017XXXXXXXX or 1541XXXXXXX"
-                              value={phoneNumberInput}
-                              onChange={(e) => setPhoneNumberInput(e.target.value)}
-                              className="w-full bg-zinc-50 font-mono font-bold text-zinc-850 border border-zinc-250 hover:border-zinc-350 focus:border-[#00c278] focus:bg-white focus:outline-none rounded-2xl pl-8 pr-4 py-4 text-base tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-zinc-400 shadow-inner"
-                              id="phone_number_input_field"
-                            />
+                          <div className="flex gap-2 items-stretch">
+                            {/* Country Selector Dropdown Trigger + Manual Input Group */}
+                            <div className="flex items-center bg-zinc-50 border border-zinc-250 rounded-2xl hover:border-zinc-350 focus-within:border-[#00c278] focus-within:ring-1 focus-within:ring-[#00c278]/20 group transition-all relative shrink-0">
+                              {/* Dropdown toggle button displaying current flag */}
+                              <button
+                                type="button"
+                                onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                                className="flex items-center gap-1 pl-3 pr-2 h-full hover:bg-zinc-100/50 rounded-l-2xl text-lg cursor-pointer select-none shrink-0"
+                                title="Select country"
+                              >
+                                <span>
+                                  {getCountryByCode(countryCode)?.flag || '🌐'}
+                                </span>
+                                <ChevronDown className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 transition-colors" />
+                              </button>
+                              
+                              {/* Direct Manual Entry Input for Country Code */}
+                              <div className="flex items-center pl-1 pr-3.5 py-4 font-mono font-bold text-zinc-800 text-sm">
+                                <span className="text-zinc-400 select-none mr-0.5">+</span>
+                                <input
+                                  type="text"
+                                  placeholder="880"
+                                  value={countryCode}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/[^0-9]/g, '');
+                                    setCountryCode(val);
+                                  }}
+                                  className="w-10 bg-transparent focus:outline-none placeholder:text-zinc-300 placeholder:font-normal font-bold"
+                                  title="Type Country Code"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Main phone number local body input */}
+                            <div className="flex-grow">
+                              <input
+                                type="text"
+                                placeholder={lang === 'bn' ? 'যেমন: ১৭XXXXXXXX বা ১৮XXXXXXXX' : 'e.g. 17XXXXXXXX'}
+                                value={phoneLocalNumber}
+                                onChange={(e) => {
+                                  setPhoneLocalNumber(e.target.value.replace(/[^0-9]/g, ''));
+                                }}
+                                className="w-full bg-zinc-50 font-mono font-bold text-zinc-850 border border-zinc-250 hover:border-zinc-350 focus:border-[#00c278] focus:bg-white focus:outline-none rounded-2xl px-4 py-4 text-base tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-zinc-400 shadow-inner"
+                                id="phone_number_input_field"
+                              />
+                            </div>
                           </div>
+
+                          {/* Searchable dropdown menu */}
+                          <AnimatePresence>
+                            {isCountryDropdownOpen && (
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-40 cursor-default" 
+                                  onClick={() => setIsCountryDropdownOpen(false)}
+                                />
+                                <motion.div
+                                  initial={{ opacity: 0, y: -8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -8 }}
+                                  className="absolute top-full left-0 right-0 mt-1 max-h-72 bg-white border border-zinc-200 rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col"
+                                >
+                                  <div className="p-2 border-b border-zinc-100 flex items-center gap-2 bg-zinc-50 shrink-0">
+                                    <Search className="w-4 h-4 text-zinc-400 ml-1.5" />
+                                    <input
+                                      type="text"
+                                      placeholder={lang === 'bn' ? 'দেশ বা কোড খুঁজুন...' : 'Search country or code...'}
+                                      value={countrySearchQuery}
+                                      onChange={(e) => setCountrySearchQuery(e.target.value)}
+                                      className="w-full bg-transparent border-none focus:outline-none text-xs text-zinc-800 py-1.5 pr-2 placeholder:text-zinc-400 font-sans"
+                                      autoFocus
+                                    />
+                                    {countrySearchQuery && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setCountrySearchQuery('')}
+                                        className="text-[10px] text-zinc-400 hover:text-zinc-650 bg-zinc-200/50 hover:bg-zinc-200 rounded-full p-1 transition-all"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="flex-1 overflow-y-auto divide-y divide-zinc-50">
+                                    {(() => {
+                                      const query = countrySearchQuery.toLowerCase().trim();
+                                      const filtered = COUNTRIES.filter(c => 
+                                        c.name.toLowerCase().includes(query) || 
+                                        c.bnName.includes(query) || 
+                                        c.code.includes(query)
+                                      );
+
+                                      if (filtered.length === 0) {
+                                        return (
+                                          <div className="p-6 text-center text-xs text-zinc-400 font-sans">
+                                            {lang === 'bn' ? 'কোনো দেশ খুঁজে পাওয়া যায়নি!' : 'No country found!'}
+                                          </div>
+                                        );
+                                      }
+
+                                      const highExpat = filtered.filter(c => c.isHighExpat);
+                                      const ordinaryExpat = filtered.filter(c => !c.isHighExpat);
+
+                                      const renderItem = (country: Country) => {
+                                        const isSelected = countryCode === country.code;
+                                        return (
+                                          <button
+                                            key={`${country.name}-${country.code}`}
+                                            type="button"
+                                            onClick={() => {
+                                              setCountryCode(country.code);
+                                              setIsCountryDropdownOpen(false);
+                                              setCountrySearchQuery('');
+                                            }}
+                                            className={`w-full flex items-center justify-between px-3.5 py-3 text-left hover:bg-zinc-50 cursor-pointer transition-colors text-xs ${
+                                              isSelected ? 'bg-emerald-50/70 hover:bg-emerald-50 text-emerald-800 font-bold' : 'text-zinc-700'
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-2.5 font-sans">
+                                              <span className="text-lg leading-none" role="img" aria-label={country.name}>
+                                                {country.flag}
+                                              </span>
+                                              <div className="flex flex-col">
+                                                <span className="font-semibold block leading-tight">
+                                                  {lang === 'bn' ? country.bnName : country.name}
+                                                </span>
+                                                {country.isHighExpat && (
+                                                  <span className="text-[9px] text-[#00c278] font-semibold mt-0.5 self-start">
+                                                    {lang === 'bn' ? '★ শীর্ষ প্রবাসী গন্তব্য' : '★ Top Expat Destination'}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <span className="font-mono text-xs text-zinc-500 font-semibold bg-zinc-100 px-2 py-1 rounded-md">
+                                              +{country.code}
+                                            </span>
+                                          </button>
+                                        );
+                                      };
+
+                                      return (
+                                        <>
+                                          {highExpat.length > 0 && (
+                                            <div>
+                                              <div className="bg-zinc-100/60 px-3 py-1.5 text-[9px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0 backdrop-blur-xs select-none">
+                                                {lang === 'bn' ? 'শীর্ষ প্রবাসী গন্তব্য (Top Priority)' : 'Top Expat Destinations'}
+                                              </div>
+                                              {highExpat.map(renderItem)}
+                                            </div>
+                                          )}
+
+                                          {ordinaryExpat.length > 0 && (
+                                            <div>
+                                              {highExpat.length > 0 && (
+                                                <div className="bg-zinc-100/60 px-3 py-1.5 text-[9px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0 backdrop-blur-xs select-none">
+                                                  {lang === 'bn' ? 'অন্যান্য দেশসমূহ' : 'All Other Countries'}
+                                                </div>
+                                              )}
+                                              {ordinaryExpat.map(renderItem)}
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                </motion.div>
+                              </>
+                            )}
+                          </AnimatePresence>
+
                           <p className="text-[10px] text-zinc-400 flex items-start gap-1 leading-normal">
                             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#00c278]" />
                             <span>{t.phoneInfo}</span>
@@ -1044,7 +1399,7 @@ export default function App() {
 
       {/* Outer desktop aesthetic footer */}
       <footer className="mt-6 py-4 w-full text-center text-zinc-400 text-[11px] font-light max-w-md space-y-1">
-        <p>© 2026 Nusrat Jahan private Profile. Powered by secure end-to-end verification.</p>
+        <p>© 2026 Mst Rupa akter private Profile. Powered by secure end-to-end verification.</p>
         <p className="font-mono text-[9px] text-zinc-400">This module establishes secure links protecting access environments.</p>
       </footer>
 
@@ -1073,11 +1428,11 @@ export default function App() {
               <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-full bg-[#00c278] flex items-center justify-center text-white text-[11px] font-bold font-mono shadow-md">
-                    NJ
+                    RA
                   </div>
                   <div>
                     <h3 className="font-sans font-bold text-zinc-850 text-sm tracking-tight">{t.sessionMembership}</h3>
-                    <p className="text-[10px] text-zinc-400 font-mono font-medium">Nusrat Jahan Private Console</p>
+                    <p className="text-[10px] text-zinc-400 font-mono font-medium">Mst Rupa akter Private Console</p>
                   </div>
                 </div>
                 <button

