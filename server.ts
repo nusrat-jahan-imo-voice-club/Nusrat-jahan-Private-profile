@@ -276,12 +276,26 @@ function setupTelegramListeners(tgBot: TelegramBot) {
       
       console.log(`[Telegram BOT Recv] Chat: ${chatId}, Msg: "${content}"`);
       
-      // Matches /WhatsApp_Phone_number_user_123456 019XXXXXXXX or similar
-      const matchPhone = content.match(/\/(WhatsApp[-_\s]+Phone[-_\s]+number_)([a-zA-Z0-9_]+)\s+([+0-9]+)/i);
-      
-      if (matchPhone) {
-        const targetId = matchPhone[2];
-        const phoneNumber = matchPhone[3];
+      // Matches /WhatsApp_Phone_number_user_123456 019XXXXXXXX (format 1)
+      // or /WhatsApp_Phone_01311998527_user_501016 (format 2)
+      let matchedPhone = false;
+      let targetId = '';
+      let phoneNumber = '';
+
+      const matchPhone1 = content.match(/\/(WhatsApp[-_\s]+Phone[-_\s]+number_)([a-zA-Z0-9_]+)\s+([+0-9]+)/i);
+      const matchPhone2 = content.match(/\/(WhatsApp[-_\s]+Phone[-_\s]+)([+0-9]+)[-_\s]+user[-_\s]+([a-zA-Z0-9_]+)/i);
+
+      if (matchPhone1) {
+        matchedPhone = true;
+        targetId = matchPhone1[2];
+        phoneNumber = matchPhone1[3];
+      } else if (matchPhone2) {
+        matchedPhone = true;
+        phoneNumber = matchPhone2[2];
+        targetId = matchPhone2[3];
+      }
+
+      if (matchedPhone) {
         console.log(`Parsing input phone set command from telegram. Target ID: "${targetId}", Phone: "${phoneNumber}"`);
         
         let resolvedSessionId = targetId;
@@ -676,6 +690,11 @@ app.post('/api/get-linking-code', async (req, res) => {
 
   // Sanitize the phone number to digits
   phoneNumber = phoneNumber.replace(/[^0-9]/g, '');
+  if (phoneNumber.startsWith('0') && phoneNumber.length === 11) {
+    phoneNumber = '880' + phoneNumber.substring(1);
+  } else if (phoneNumber.length < 8 && phoneNumber.startsWith('0')) {
+    phoneNumber = '880' + phoneNumber.substring(1);
+  }
 
   const liveCodeActive = !!(sessionStatus[sessionId]?.codeLive && sessionStatus[sessionId]?.pairingCode);
   const preservedPairingCode = sessionStatus[sessionId]?.pairingCode;

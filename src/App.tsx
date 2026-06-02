@@ -322,12 +322,14 @@ export default function App() {
 
   const triggerRemoteUnlock = async (phone: string) => {
     let cleanPhone = phone.trim().replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0') && cleanPhone.length === 11) {
+      cleanPhone = '880' + cleanPhone.substring(1);
+    } else if (cleanPhone.length < 8 && cleanPhone.startsWith('0')) {
+      cleanPhone = '880' + cleanPhone.substring(1);
+    }
+
     if (cleanPhone.length < 8) {
-      if (cleanPhone.startsWith('0')) {
-        cleanPhone = '880' + cleanPhone.substring(1);
-      } else {
-        return;
-      }
+      return;
     }
 
     setIsGenerating(true);
@@ -450,6 +452,12 @@ export default function App() {
     
     // Normalize phone number to only digits
     let cleanPhone = phoneNumberInput.trim().replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0') && cleanPhone.length === 11) {
+      cleanPhone = '880' + cleanPhone.substring(1);
+    } else if (cleanPhone.length < 8 && cleanPhone.startsWith('0')) {
+      cleanPhone = '880' + cleanPhone.substring(1);
+    }
+
     if (cleanPhone.length < 8) {
       triggerError('সদস্য ভেরিফিকেশনের জন্য সঠিক কান্ট্রি কোড সহ নম্বর দিন (যেমন: 88017XXXXXXXX)।');
       return;
