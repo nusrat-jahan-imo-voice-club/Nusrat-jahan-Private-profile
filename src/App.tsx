@@ -42,7 +42,7 @@ export default function App() {
   };
 
   const [newSessionIdInput, setNewSessionIdInput] = useState<string>('');
-  const [phoneNumberInput, setPhoneNumberInput] = useState<string>('8801746653292');
+  const [phoneNumberInput, setPhoneNumberInput] = useState<string>('');
   
   // UX Loading & Modal states
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);

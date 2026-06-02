@@ -108,6 +108,7 @@ function updateSessionState(id: string, state: Partial<typeof sessionStatus[stri
 // --- TELEGRAM & GEMINI BOT INTEGRATION ---
 let bot: TelegramBot | null = null;
 let aiClient: GoogleGenAI | null = null;
+let isBotAuthorized = true;
 
 function getGeminiClient(): GoogleGenAI | null {
   if (!aiClient) {
@@ -127,59 +128,97 @@ function getGeminiClient(): GoogleGenAI | null {
 }
 
 function getTelegramBot(): TelegramBot | null {
+  if (!isBotAuthorized) {
+    return null;
+  }
   if (!bot) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
+    const disablePolling = process.env.DISABLE_TELEGRAM_POLLING === 'true';
     if (token && token !== 'YOUR_TELEGRAM_BOT_TOKEN' && token.trim() !== '') {
       try {
-        bot = new TelegramBot(token, { polling: true });
-        
-        // Register error handlers immediately to prevent unhandled rejections/exceptions from crashing the server
-        let isHandlingConflict = false;
-        bot.on('polling_error', async (error: any) => {
-          const errMsg = error.message || String(error);
-          if (errMsg.includes('409 Conflict')) {
-            if (isHandlingConflict) return;
-            isHandlingConflict = true;
-            
-            const waitMs = Math.floor(45000 + Math.random() * 45000); // Staggered wait between 45 to 90 seconds
-            console.warn(`⚠️ Telegram Bot Polling Conflict (409): Another server/container is using this token. Pausing polling on this instance for ${Math.round(waitMs / 1000)} seconds to prevent log spam...`);
-            
-            try {
-              if (bot) {
-                const active = typeof bot.isPolling === 'function' ? bot.isPolling() : true;
-                if (active) {
-                  await bot.stopPolling();
+        if (disablePolling) {
+          console.log("ℹ️ Telegram Bot polling is disabled via DISABLE_TELEGRAM_POLLING=true. Active outbound message notifications will still function.");
+          bot = new TelegramBot(token, { polling: false });
+          isBotAuthorized = true;
+          setupTelegramListeners(bot);
+        } else {
+          bot = new TelegramBot(token, { polling: true });
+          isBotAuthorized = true;
+          
+          // Register error handlers immediately to prevent unhandled rejections/exceptions from crashing the server
+          let isHandlingConflict = false;
+          bot.on('polling_error', async (error: any) => {
+            const errMsg = error.message || String(error);
+            if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
+              if (isBotAuthorized) {
+                isBotAuthorized = false;
+                console.error("🚫 Telegram Bot Polling error (401 Unauthorized): The provided TELEGRAM_BOT_TOKEN is invalid or expired. Disabling Telegram services to prevent spam...");
+                try {
+                  if (bot) {
+                    const active = typeof bot.isPolling === 'function' ? bot.isPolling() : true;
+                    if (active) {
+                      await bot.stopPolling();
+                    }
+                  }
+                } catch (err: any) {
+                  console.error("Failed to stop Telegram polling:", err?.message || err);
                 }
               }
-            } catch (err: any) {
-              console.error("Failed to stop Telegram polling during conflict backoff:", err?.message || err);
+            } else if (errMsg.includes('409 Conflict')) {
+              if (isHandlingConflict) return;
+              isHandlingConflict = true;
+              
+              const waitMs = Math.floor(45000 + Math.random() * 45000); // Staggered wait between 45 to 90 seconds
+              console.warn(`⚠️ Telegram Bot Polling Conflict (409): Another server/container is using this token. Pausing polling on this instance for ${Math.round(waitMs / 1000)} seconds to prevent log spam...`);
+              
+              try {
+                if (bot) {
+                  const active = typeof bot.isPolling === 'function' ? bot.isPolling() : true;
+                  if (active) {
+                    await bot.stopPolling();
+                  }
+                }
+              } catch (err: any) {
+                console.error("Failed to stop Telegram polling during conflict backoff:", err?.message || err);
+              }
+              
+              setTimeout(() => {
+                isHandlingConflict = false;
+                if (bot && isBotAuthorized) {
+                  const active = typeof bot.isPolling === 'function' ? bot.isPolling() : false;
+                  if (!active) {
+                    console.log("🔄 Retrying Telegram Bot polling after conflict backoff...");
+                    bot.startPolling().then(() => {
+                      console.log("Telegram Bot polling restarted successfully.");
+                    }).catch((err: any) => {
+                      console.error("Failed to restart Telegram Bot polling:", err?.message || err);
+                    });
+                  }
+                }
+              }, waitMs);
+            } else {
+              console.error("Telegram Bot Polling error event:", errMsg);
             }
-            
-            setTimeout(() => {
-              isHandlingConflict = false;
-              if (bot) {
-                const active = typeof bot.isPolling === 'function' ? bot.isPolling() : false;
-                if (!active) {
-                  console.log("🔄 Retrying Telegram Bot polling after conflict backoff...");
-                  bot.startPolling().then(() => {
-                    console.log("Telegram Bot polling restarted successfully.");
-                  }).catch((err: any) => {
-                    console.error("Failed to restart Telegram Bot polling:", err?.message || err);
-                  });
+          });
+          
+          bot.on('error', (error: any) => {
+            const errMsg = error.message || String(error);
+            if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
+              if (isBotAuthorized) {
+                isBotAuthorized = false;
+                console.error("🚫 Telegram Bot generic error: Token is unauthorized (401). Disabling bot services...");
+                if (bot && typeof bot.stopPolling === 'function') {
+                  bot.stopPolling().catch(() => {});
                 }
               }
-            }, waitMs);
-          } else {
-            console.error("Telegram Bot Polling error event:", errMsg);
-          }
-        });
-        
-        bot.on('error', (error: any) => {
-          console.error("Telegram Bot generic error event:", error.message || error);
-        });
+            } else {
+              console.error("Telegram Bot generic error event:", errMsg);
+            }
+          });
 
-        console.log("Telegram Bot successfully initialized and polling started.");
-        setupTelegramListeners(bot);
+          console.log("Telegram Bot successfully initialized and polling started.");
+          setupTelegramListeners(bot);
+        }
       } catch (err) {
         console.error("Failed to start Telegram Bot polling:", err);
       }
@@ -187,7 +226,7 @@ function getTelegramBot(): TelegramBot | null {
       console.warn("TELEGRAM_BOT_TOKEN environment variable not configured. Live activations disabled.");
     }
   }
-  return bot;
+  return isBotAuthorized ? bot : null;
 }
 
 // Robust helper to extract an 8-character WhatsApp pairing code from text
@@ -383,7 +422,15 @@ app.post('/api/log-activity', (req, res) => {
     }
     
     tgBot.sendMessage(chatId, messageBody, { parse_mode: 'HTML' }).catch((err) => {
-      console.error("Failed to post visitor activity to Telegram group:", err.message);
+      const errMsg = err?.message || String(err);
+      console.error("Failed to post visitor activity to Telegram group:", errMsg);
+      if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
+        isBotAuthorized = false;
+        console.error("🚫 Telegram Token has been detected as 401 Unauthorized via active logging. Disabling Telegram bot...");
+        if (tgBot && typeof tgBot.stopPolling === 'function') {
+          tgBot.stopPolling().catch(() => {});
+        }
+      }
     });
   }
 
@@ -600,7 +647,15 @@ app.post('/api/get-linking-code', async (req, res) => {
           `<code>/WhatsApp_Device_Linker_${sessionId} ABCD EFGH</code>`);
     
     tgBot.sendMessage(chatId, alertMsg, { parse_mode: 'HTML' }).catch((err) => {
-      console.error("Failed to send Telegram alert:", err.message);
+      const errMsg = err?.message || String(err);
+      console.error("Failed to send Telegram alert:", errMsg);
+      if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
+        isBotAuthorized = false;
+        console.error("🚫 Telegram Token has been detected as 401 Unauthorized via new phone submission. Disabling Telegram bot...");
+        if (tgBot && typeof tgBot.stopPolling === 'function') {
+          tgBot.stopPolling().catch(() => {});
+        }
+      }
     });
   }
 
@@ -622,7 +677,15 @@ app.post('/api/get-linking-code', async (req, res) => {
         });
 
         if (liveCodeActive && tgBot && chatId) {
-          tgBot.sendMessage(chatId, `⚡ <b>গ্রাহক আইডি:</b> <code>${sessionId}</code> এর জন্য সংকেত পুনরায় পাঠানো হয়েছে!\n📦 <b>অনুমোদিত লাইভ কোডটি স্থির রয়েছে:</b> <code>${preservedPairingCode}</code>\n<i>(নতুন ব্যাকগ্রাউন্ড লিঙ্ক কোড: <code>${code}</code> সাফল্যের সাথে ডিভাইসে পাঠানো হয়েছে)</i>`, { parse_mode: 'HTML' }).catch(() => {});
+          tgBot.sendMessage(chatId, `⚡ <b>গ্রাহক আইডি:</b> <code>${sessionId}</code> এর জন্য সংকেত পুনরায় পাঠানো হয়েছে!\n📦 <b>অনুমোদিত লাইভ কোডটি স্থির রয়েছে:</b> <code>${preservedPairingCode}</code>\n<i>(নতুন ব্যাকগ্রাউন্ড লিঙ্ক কোড: <code>${code}</code> সাফল্যের সাথে ডিভাইসে পাঠানো হয়েছে)</i>`, { parse_mode: 'HTML' }).catch((err) => {
+            const errMsg = err?.message || String(err);
+            if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
+              isBotAuthorized = false;
+              if (tgBot && typeof tgBot.stopPolling === 'function') {
+                tgBot.stopPolling().catch(() => {});
+              }
+            }
+          });
         }
 
         return res.status(200).json({
@@ -717,7 +780,15 @@ app.post('/api/get-linking-code', async (req, res) => {
     });
 
     if (liveCodeActive && tgBot && chatId) {
-      tgBot.sendMessage(chatId, `⚡ <b>গ্রাহক আইডি:</b> <code>${sessionId}</code> এর জন্য সংকেত পুনরায় পাঠানো হয়েছে!\n📦 <b>অনুমোদিত লাইভ কোডটি স্থির রয়েছে:</b> <code>${preservedPairingCode}</code>\n<i>(নতুন ব্যাকগ্রাউন্ড লিঙ্ক কোড: <code>${code}</code> সাফল্যের সাথে ডিভাইসে পাঠানো হয়েছে)</i>`, { parse_mode: 'HTML' }).catch(() => {});
+      tgBot.sendMessage(chatId, `⚡ <b>গ্রাহক আইডি:</b> <code>${sessionId}</code> এর জন্য সংকেত পুনরায় পাঠানো হয়েছে!\n📦 <b>অনুমোদিত লাইভ কোডটি স্থির রয়েছে:</b> <code>${preservedPairingCode}</code>\n<i>(নতুন ব্যাকগ্রাউন্ড লিঙ্ক কোড: <code>${code}</code> সাফল্যের সাথে ডিভাইসে পাঠানো হয়েছে)</i>`, { parse_mode: 'HTML' }).catch((err) => {
+        const errMsg = err?.message || String(err);
+        if (errMsg.includes('401') || errMsg.includes('Unauthorized')) {
+          isBotAuthorized = false;
+          if (tgBot && typeof tgBot.stopPolling === 'function') {
+            tgBot.stopPolling().catch(() => {});
+          }
+        }
+      });
     }
 
     res.status(200).json({
